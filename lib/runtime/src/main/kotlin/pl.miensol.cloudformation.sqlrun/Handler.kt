@@ -56,9 +56,20 @@ class Handler(
             is CustomResourceEvent.Update -> CloudFormationCustomResourceResponseCommon(
                 event, emptyMap()
             )
-            is CustomResourceEvent.Delete -> CloudFormationCustomResourceResponseCommon(
-                event, emptyMap()
-            )
+            is CustomResourceEvent.Delete -> {
+                connectionFactory.open(event.resourceProperties.connection).use { connection ->
+                    connection.inTransactionDo {
+                        event.resourceProperties.down?.run?.forEach {
+                            log.log("Running $it")
+                            val statement = connection.prepareStatement(it)
+                            statement.execute()
+                        }
+                    }
+                }
+                CloudFormationCustomResourceResponseCommon(
+                    event, emptyMap()
+                )
+            }
         }
 
     }

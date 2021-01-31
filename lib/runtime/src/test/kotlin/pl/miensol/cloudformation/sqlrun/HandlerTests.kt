@@ -7,6 +7,7 @@ import org.testcontainers.containers.JdbcDatabaseContainer
 import org.testcontainers.containers.MySQLContainerProvider
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import pl.miensol.shouldko.shouldContain
 import pl.miensol.shouldko.shouldEqual
 import java.sql.ResultSet
 
@@ -29,8 +30,12 @@ internal class HandlerMysqlTestTests {
                 database = "mysql"
             )
 
-    val event
-        get() = newCreateEvent(
+    private val logger = LambdaRuntime.getLogger()
+
+    @Test
+    fun `can execute in mysql`() {
+        //given
+        val event = newCreateEvent(
             CfnSqlRuns(
                 listOf(
                     CfnSqlStatement(
@@ -42,10 +47,11 @@ internal class HandlerMysqlTestTests {
             connection
         )
 
-    @Test
-    fun `can execute in mysql`() {
         //when
-        sut.handleRequest(event, LambdaRuntime.getLogger())
+        sut.handleRequest(
+            event,
+            logger
+        )
 
         //then
         val matchingUser =
@@ -59,6 +65,128 @@ internal class HandlerMysqlTestTests {
         matchingUser[0]["user"].shouldEqual("myDatabaseUser")
     }
 
+    @Test
+    fun `can execute multiple statements`() {
+        //given
+        mysql.executeChanges(
+            "use test",
+            "create table items (id varchar(100) primary key)"
+        )
+
+        val event = newCreateEvent(
+            CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values ('one')"
+                    ),
+                    CfnSqlStatement(
+                        "insert into items values ('two')"
+                    )
+                )
+            ),
+            connection.copy(database = "test")
+        )
+
+        //when
+        sut.handleRequest(
+            event,
+            logger
+        )
+
+        //then
+        val items =
+            mysql.executeQuery("select id from items") {
+                getString("id")
+            }
+
+        items.size.shouldEqual(2)
+        items.shouldContain("one")
+        items.shouldContain("two")
+    }
+
+    @Test
+    fun `executes multiple statements in transaction`() {
+        //given
+        mysql.executeChanges(
+            "use test",
+            "create table items (id varchar(100) primary key)"
+        )
+
+        val event = newCreateEvent(
+            CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values ('one')"
+                    ),
+                    CfnSqlStatement(
+                        "insert into items values ('one')"
+                    )
+                )
+            ),
+            connection.copy(database = "test")
+        )
+
+        //when
+        val result = runCatching {
+            sut.handleRequest(
+                event,
+                logger
+            )
+        }
+
+        //then
+        result.isFailure.shouldEqual(true)
+        val items = mysql.executeQuery("select id from items") {
+            getString("id")
+        }
+
+        items.size.shouldEqual(0)
+    }
+
+    @Test
+    fun `delete event executes down`() {
+        //given
+//given
+        mysql.executeChanges(
+            "use test",
+            "create table items (id varchar(100) primary key)"
+        )
+
+        val create = newCreateEvent(
+            CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values ('one')"
+                    )
+                )
+            ),
+            connection.copy(database = "test")
+        )
+        sut.handleRequest(create, logger)
+
+
+        //when
+
+        val delete = newDeleteEvent(
+            up = create.resourceProperties.up,
+            down = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "delete from items where id = 'one'"
+                    )
+                )
+            ),
+            connection.copy(database = "test")
+        )
+        sut.handleRequest(delete, logger)
+
+        //then
+        val items = mysql.executeQuery("select id from items") {
+            getString("id")
+        }
+
+        items.size.shouldEqual(0)
+    }
 
 }
 
@@ -78,7 +206,17 @@ fun <T> JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeQuery(
     }
 }
 
-private fun newCreateEvent(cfnSqlRuns: CfnSqlRuns, connection: CfnSqlRunConnection) = CustomResourceEvent.Create(
+fun JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeChange(query: String): Int {
+    return createConnection("").use {
+        it.prepareStatement(query).executeUpdate()
+    }
+}
+
+fun JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeChanges(vararg queries: String): List<Int> {
+    return queries.map { executeChange(it) }
+}
+
+private fun newCreateEvent(up: CfnSqlRuns, connection: CfnSqlRunConnection) = CustomResourceEvent.Create(
     serviceToken = "test.serviceToken",
     responseURL = "test.responseURL",
     stackId = "test.stackId",
@@ -88,9 +226,30 @@ private fun newCreateEvent(cfnSqlRuns: CfnSqlRuns, connection: CfnSqlRunConnecti
     resourceProperties = CfnSqlRunProps(
         ServiceToken = "test.serviceToken",
         connection = connection,
-        up = cfnSqlRuns
+        up = up
     ),
     requestType = "Create"
+)
+
+private fun newDeleteEvent(
+    up: CfnSqlRuns = CfnSqlRuns(emptyList()),
+    down: CfnSqlRuns,
+    connection: CfnSqlRunConnection
+) = CustomResourceEvent.Delete(
+    serviceToken = "test.serviceToken",
+    responseURL = "test.responseURL",
+    stackId = "test.stackId",
+    requestId = "test.requestId",
+    logicalResourceId = "test.logicalResourceId",
+    resourceType = "test.resourceType",
+    physicalResourceId = "test.physicalResourceId",
+    resourceProperties = CfnSqlRunProps(
+        ServiceToken = "test.serviceToken",
+        connection = connection,
+        up = up,
+        down = down,
+    ),
+    requestType = "Delete"
 )
 
 fun newMysqlDriverTypeHostPort() = CfnSqlRunConnection.DriverTypeHostPort(

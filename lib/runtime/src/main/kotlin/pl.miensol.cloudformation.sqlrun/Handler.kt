@@ -4,11 +4,9 @@ import com.amazonaws.services.lambda.runtime.Context
 import com.amazonaws.services.lambda.runtime.LambdaLogger
 import com.amazonaws.services.lambda.runtime.RequestStreamHandler
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
 import java.io.InputStream
 import java.io.OutputStream
 import java.sql.Connection
-import java.sql.PreparedStatement
 
 
 class Handler(
@@ -43,9 +41,7 @@ class Handler(
                 connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.resourceProperties.up.run.forEach {
-                            log.log("Running $it")
-                            val statement = connection.prepareStatement(it)
-                            statement.execute()
+                            executeStatement(connection, it, log)
                         }
                     }
                 }
@@ -53,16 +49,26 @@ class Handler(
                     event, emptyMap()
                 )
             }
-            is CustomResourceEvent.Update -> CloudFormationCustomResourceResponseCommon(
-                event, emptyMap()
-            )
+            is CustomResourceEvent.Update -> {
+                connectionFactory.open(event.resourceProperties.connection).use { connection ->
+                    connection.inTransactionDo {
+                        event.oldResourceProperties.down?.run?.forEach {
+                            executeStatement(connection, it, log)
+                        }
+                        event.resourceProperties.up.run.forEach {
+                            executeStatement(connection, it, log)
+                        }
+                    }
+                }
+                CloudFormationCustomResourceResponseCommon(
+                    event, emptyMap()
+                )
+            }
             is CustomResourceEvent.Delete -> {
                 connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.resourceProperties.down?.run?.forEach {
-                            log.log("Running $it")
-                            val statement = connection.prepareStatement(it)
-                            statement.execute()
+                            executeStatement(connection, it, log)
                         }
                     }
                 }
@@ -75,3 +81,12 @@ class Handler(
     }
 }
 
+internal fun executeStatement(
+    connection: Connection,
+    statement: CfnSqlStatement,
+    log: LambdaLogger
+) {
+    log.log("Running $statement")
+    val sqlStatement = connection.prepareStatement(statement)
+    sqlStatement.execute()
+}

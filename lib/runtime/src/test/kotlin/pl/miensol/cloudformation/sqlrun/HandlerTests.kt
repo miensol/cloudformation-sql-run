@@ -36,7 +36,7 @@ internal class HandlerMysqlTestTests {
     fun `can execute in mysql`() {
         //given
         val event = newCreateEvent(
-            CfnSqlRuns(
+            up = CfnSqlRuns(
                 listOf(
                     CfnSqlStatement(
                         "CREATE USER 'myDatabaseUser'@'%' IDENTIFIED BY :password",
@@ -44,7 +44,7 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection
+            connection = connection
         )
 
         //when
@@ -84,7 +84,7 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection.copy(database = "test")
+            connection = connection.copy(database = "test")
         )
 
         //when
@@ -123,7 +123,7 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection.copy(database = "test")
+            connection = connection.copy(database = "test")
         )
 
         //when
@@ -146,7 +146,6 @@ internal class HandlerMysqlTestTests {
     @Test
     fun `delete event executes down`() {
         //given
-//given
         mysql.executeChanges(
             "use test",
             "create table items (id varchar(100) primary key)"
@@ -160,13 +159,19 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection.copy(database = "test")
+            down = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "delete from items where id = 'one'"
+                    )
+                )
+            ),
+            connection = connection.copy(database = "test")
         )
         sut.handleRequest(create, logger)
 
 
         //when
-
         val delete = newDeleteEvent(
             up = create.resourceProperties.up,
             down = CfnSqlRuns(
@@ -186,6 +191,56 @@ internal class HandlerMysqlTestTests {
         }
 
         items.size.shouldEqual(0)
+    }
+
+    @Test
+    fun `update event executes previous down`() {
+        //given
+        mysql.executeChanges(
+            "use test",
+            "create table items (id varchar(100) primary key)"
+        )
+
+        val create = newCreateEvent(
+            CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values ('one')"
+                    )
+                )
+            ),
+            down = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "delete from items where id = 'one'"
+                    )
+                )
+            ),
+            connection = connection.copy(database = "test")
+        )
+        sut.handleRequest(create, logger)
+
+
+        //when
+        val update = newUpdateEvent(
+            up = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values ('updated')"
+                    )
+                )
+            ),
+            previous = create,
+            connection = connection.copy(database = "test"),
+        )
+        sut.handleRequest(update, logger)
+
+        //then
+        val items = mysql.executeQuery("select id from items") {
+            getString("id")
+        }
+
+        items.shouldEqual(listOf("updated"))
     }
 
 }
@@ -216,7 +271,11 @@ fun JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeChanges(vararg qu
     return queries.map { executeChange(it) }
 }
 
-private fun newCreateEvent(up: CfnSqlRuns, connection: CfnSqlRunConnection) = CustomResourceEvent.Create(
+private fun newCreateEvent(
+    up: CfnSqlRuns,
+    down: CfnSqlRuns = CfnSqlRuns(emptyList()),
+    connection: CfnSqlRunConnection
+) = CustomResourceEvent.Create(
     serviceToken = "test.serviceToken",
     responseURL = "test.responseURL",
     stackId = "test.stackId",
@@ -226,7 +285,8 @@ private fun newCreateEvent(up: CfnSqlRuns, connection: CfnSqlRunConnection) = Cu
     resourceProperties = CfnSqlRunProps(
         ServiceToken = "test.serviceToken",
         connection = connection,
-        up = up
+        up = up,
+        down = down
     ),
     requestType = "Create"
 )
@@ -250,6 +310,29 @@ private fun newDeleteEvent(
         down = down,
     ),
     requestType = "Delete"
+)
+
+private fun newUpdateEvent(
+    up: CfnSqlRuns = CfnSqlRuns(emptyList()),
+    down: CfnSqlRuns = CfnSqlRuns(emptyList()),
+    previous: CustomResourceEvent,
+    connection: CfnSqlRunConnection
+) = CustomResourceEvent.Update(
+    serviceToken = "test.serviceToken",
+    responseURL = "test.responseURL",
+    stackId = "test.stackId",
+    requestId = "test.requestId",
+    logicalResourceId = "test.logicalResourceId",
+    resourceType = "test.resourceType",
+    physicalResourceId = "test.physicalResourceId",
+    resourceProperties = CfnSqlRunProps(
+        ServiceToken = "test.serviceToken",
+        connection = connection,
+        up = up,
+        down = down,
+    ),
+    oldResourceProperties = previous.resourceProperties,
+    requestType = "Update"
 )
 
 fun newMysqlDriverTypeHostPort() = CfnSqlRunConnection.DriverTypeHostPort(

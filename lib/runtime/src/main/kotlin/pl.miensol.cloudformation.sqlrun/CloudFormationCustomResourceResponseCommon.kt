@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import java.util.*
 
 @Serializable
-data class CloudFormationCustomResourceResponseCommon(
+internal data class CloudFormationCustomResourceResponseCommon(
     val physicalResourceId: String,
     val stackId: String,
     val requestId: String,

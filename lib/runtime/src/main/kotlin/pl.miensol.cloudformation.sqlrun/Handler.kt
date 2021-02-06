@@ -9,8 +9,9 @@ import java.io.OutputStream
 import java.sql.Connection
 
 
-class Handler(
-    private val connectionFactory: DatabaseConnectionFactory = DatabaseConnectionFactory()
+internal class Handler(
+    private val connectionFactory: DatabaseConnectionFactory = DatabaseConnectionFactory(),
+    private val resolver: ParameterReferenceResolver = awsDynamicReferencesResolver()
 ) : RequestStreamHandler {
     override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
         val log = context.logger
@@ -41,7 +42,7 @@ class Handler(
                 connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.resourceProperties.up.run.forEach {
-                            executeStatement(connection, it, log)
+                            executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
@@ -53,10 +54,10 @@ class Handler(
                 connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.oldResourceProperties.down?.run?.forEach {
-                            executeStatement(connection, it, log)
+                            executeStatement(connection, it, resolver, log)
                         }
                         event.resourceProperties.up.run.forEach {
-                            executeStatement(connection, it, log)
+                            executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
@@ -68,7 +69,7 @@ class Handler(
                 connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.resourceProperties.down?.run?.forEach {
-                            executeStatement(connection, it, log)
+                            executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
@@ -84,9 +85,13 @@ class Handler(
 internal fun executeStatement(
     connection: Connection,
     statement: CfnSqlStatement,
+    resolver: ParameterReferenceResolver,
     log: LambdaLogger
 ) {
-    log.log("Running $statement")
-    val sqlStatement = connection.prepareStatement(statement)
+    val unresolvedSqlStatement = statement.toSqlStatement()
+    log.log("Running $unresolvedSqlStatement")
+    val resolvedSqlStatement = unresolvedSqlStatement.resolveParameters(resolver)
+    val formattedStatement = resolvedSqlStatement.toJdbcFormattedSqlStatement()
+    val sqlStatement = connection.prepareStatement(formattedStatement)
     sqlStatement.execute()
 }

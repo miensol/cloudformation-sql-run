@@ -1,6 +1,9 @@
 package pl.miensol.cloudformation.sqlrun
 
 import com.amazonaws.services.lambda.runtime.LambdaRuntime
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
 import org.testcontainers.containers.JdbcDatabaseContainer
@@ -13,7 +16,17 @@ import java.sql.ResultSet
 
 @Testcontainers
 internal class HandlerMysqlTestTests {
-    val sut = Handler()
+    val resolver = mockk<ParameterReferenceResolver> {
+        every {
+            resolve(any())
+        } answers {
+            arg(0)
+        }
+    }
+
+    val sut = Handler(
+        resolver = resolver
+    )
 
     @Container
     val mysql = MySQLContainerProvider().newInstance()
@@ -63,6 +76,7 @@ internal class HandlerMysqlTestTests {
 
         matchingUser.size.shouldEqual(1)
         matchingUser[0]["user"].shouldEqual("myDatabaseUser")
+        verify { resolver.resolve("secret") }
     }
 
     @Test

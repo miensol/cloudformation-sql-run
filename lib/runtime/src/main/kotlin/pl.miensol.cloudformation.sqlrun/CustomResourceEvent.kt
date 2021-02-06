@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 @Serializable(with = CustomResourceEventSerializer::class)
-sealed class CustomResourceEvent {
+internal sealed class CustomResourceEvent {
     abstract val serviceToken: String
     abstract val responseURL: String
     abstract val stackId: String

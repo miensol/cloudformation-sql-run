@@ -1,0 +1,58 @@
+plugins {
+    id "org.jetbrains.kotlin.jvm" version "1.4.30"
+    id "org.jetbrains.kotlin.plugin.serialization" version "1.4.30"
+}
+
+group "pl.miensol.cloudformation.sqlrun"
+version "1.0.0"
+
+repositories {
+    mavenCentral()
+    maven {
+        url "https://dl.bintray.com/brightinventions/maven"
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "com.amazonaws:aws-lambda-java-core:1.2.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1"
+    implementation "software.amazon.awssdk:secretsmanager:2.15.76"
+
+    runtimeOnly "com.amazonaws:aws-lambda-java-log4j2:1.2.0"
+    runtimeOnly "org.mariadb.jdbc:mariadb-java-client:2.7.1"
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
+    testImplementation 'pl.miensol.shouldko:hamcrest:0.2.2'
+
+    testImplementation 'org.slf4j:slf4j-simple:1.7.30'
+
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+
+    testImplementation "io.mockk:mockk:1.10.0"
+
+    def testContainersVersion = '1.15.1'
+    testImplementation "org.testcontainers:testcontainers:$testContainersVersion"
+    testImplementation "org.testcontainers:junit-jupiter:$testContainersVersion"
+    testImplementation "org.testcontainers:mysql:$testContainersVersion"
+
+    testRuntimeOnly "mysql:mysql-connector-java:8.0.23"
+}
+
+task buildZip(type: Zip) {
+    from compileKotlin
+    from processResources
+    into("lib") {
+        from configurations.runtimeClasspath
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}

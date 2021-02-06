@@ -2,6 +2,7 @@ package pl.miensol.cloudformation.sqlrun
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest
 
@@ -31,9 +32,9 @@ internal class SecretManagerParameterReferenceResolver(
     override fun resolve(value: String): String {
         return matcher.replace(value) { matchResult ->
             val arn = matchResult.groups["arn"]?.value
-            val jsonKey = matchResult.groups["jsonKey"]?.value
-            val versionStage = matchResult.groups["versionStage"]?.value
-            val versionId = matchResult.groups["versionId"]?.value
+            val jsonKey = matchResult.groups["jsonKey"]?.value?.ifEmpty { null }
+            val versionStage = matchResult.groups["versionStage"]?.value?.ifEmpty { null }
+            val versionId = matchResult.groups["versionId"]?.value?.ifEmpty { null }
 
             val secretValueResponse = secretManager.getSecretValue(
                 GetSecretValueRequest.builder()
@@ -50,7 +51,11 @@ internal class SecretManagerParameterReferenceResolver(
             } else {
                 val secretJson = Json.decodeFromString(JsonObject.serializer(), secretValue)
                 val jsonElement = secretJson[jsonKey]!!
-                jsonElement.toString()
+                if(jsonElement is JsonPrimitive && jsonElement.isString){
+                    jsonElement.content
+                } else {
+                    jsonElement.toString()
+                }
             }
         }
     }

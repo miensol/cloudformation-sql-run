@@ -21,6 +21,7 @@ export class SqlRunProvider extends CoreConstruct {
 
     this.lambda = new lambda.Function(this, 'Lambda', {
       runtime: lambda.Runtime.JAVA_11,
+      memorySize: 1024,
       code: lambda.Code.fromAsset(handlerPath),
       handler: 'pl.miensol.cloudformation.sqlrun.Handler',
       timeout: Duration.minutes(1),

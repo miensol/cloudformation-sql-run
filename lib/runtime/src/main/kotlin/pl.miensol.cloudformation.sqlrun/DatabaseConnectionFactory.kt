@@ -3,10 +3,10 @@ package pl.miensol.cloudformation.sqlrun
 import java.sql.Connection
 import java.util.*
 
-class DatabaseConnectionFactory {
+internal class DatabaseConnectionFactory(private val resolver: ParameterReferenceResolver) {
     fun open(connection: CfnSqlRunConnection): Connection {
-        return when (connection) {
-            is CfnSqlRunConnection.DriverTypeHostPort -> open(connection)
+        return when (val resolvedConnection = connection.resolveDynamicParameterReferences(resolver)) {
+            is CfnSqlRunConnection.DriverTypeHostPort -> open(resolvedConnection)
         }
     }
 

@@ -8,6 +8,8 @@ sealed class CfnSqlRunConnection {
     abstract val username: String
     abstract val password: String
 
+    internal abstract fun resolveDynamicParameterReferences(resolver: ParameterReferenceResolver): CfnSqlRunConnection
+
     @Serializable
     @SerialName("driverTypeHostPort")
     data class DriverTypeHostPort(
@@ -17,5 +19,8 @@ sealed class CfnSqlRunConnection {
         val database: String,
         val host: String,
         val port: Int
-    ) : CfnSqlRunConnection()
+    ) : CfnSqlRunConnection() {
+        override fun resolveDynamicParameterReferences(resolver: ParameterReferenceResolver) =
+            copy(password = resolver.resolve(password))
+    }
 }

@@ -10,8 +10,8 @@ import java.sql.Connection
 
 
 internal class Handler(
-    private val connectionFactory: DatabaseConnectionFactory = DatabaseConnectionFactory(),
-    private val resolver: ParameterReferenceResolver = awsDynamicReferencesResolver()
+    private val resolver: ParameterReferenceResolver = awsDynamicReferencesResolver(),
+    private val connectionFactory: DatabaseConnectionFactory = DatabaseConnectionFactory(resolver)
 ) : RequestStreamHandler {
     override fun handleRequest(input: InputStream, output: OutputStream, context: Context) {
         val log = context.logger

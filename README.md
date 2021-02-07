@@ -26,7 +26,7 @@ export class ExamplesStack extends cdk.Stack {
         run: [{
           sql: `CREATE USER 'myDatabaseUser'@'%' IDENTIFIED BY ':password';
 
-GRANT ALL ON relevo.* TO 'myDatabaseUser'@'%';
+GRANT ALL ON myDatabase.* TO 'myDatabaseUser'@'%';
 
 FLUSH privileges
 `,

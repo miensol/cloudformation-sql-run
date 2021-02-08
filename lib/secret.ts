@@ -1,7 +1,6 @@
 import * as iam from "@aws-cdk/aws-iam";
 import { ISecret } from "@aws-cdk/aws-secretsmanager";
 import { IResolvable, IResolveContext, SecretValue } from "@aws-cdk/core";
-import { privateDecrypt } from "crypto";
 
 const SqlSecretSymbol = Symbol("SqlSecret")
 

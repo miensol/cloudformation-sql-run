@@ -22,6 +22,8 @@ export class SqlRun extends CoreConstruct {
       }
     });
 
+    props.connection.connections?.allowDefaultPortFrom(this.provider.lambda.connections)
+
     this.properties = toCfnSqlRunProps(props);
 
     this.grantAccessToSecretParameters(props)
@@ -31,6 +33,10 @@ export class SqlRun extends CoreConstruct {
       resourceType: 'Custom::SqlRun',
       properties: this.properties
     })
+  }
+
+  get connections(){
+    return this.provider.lambda.connections
   }
 
   private grantAccessToSecretParameters(sqlRunProperties: SqlRunProps) {
@@ -46,7 +52,7 @@ export class SqlRun extends CoreConstruct {
       }
     }
 
-    const connectionPassword = sqlRunProperties.connection.password;
+    const connectionPassword = sqlRunProperties.connection.toCfnSqlRunConnection().password;
     if (isSqlSecret(connectionPassword)) {
       connectionPassword.grantRead(this.provider.executionRole)
     }

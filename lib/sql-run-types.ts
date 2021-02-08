@@ -32,7 +32,7 @@ interface CfnSqlRuns {
 export interface SqlRunProps {
   vpc?: ec2.IVpc
   securityGroups?: ec2.ISecurityGroup[]
-  connection: CfnSqlRunConnection
+  connection: SqlRunConnection
   up: SqlRuns
   down?: SqlRuns
   logRetention?: logs.RetentionDays
@@ -64,7 +64,7 @@ function toCfnSqlStatement(sqlStatement: SqlStatement): CfnSqlStatement {
 
 export function toCfnSqlRunProps(sqlProps: SqlRunProps): CfnSqlRunProps {
   return {
-    connection: sqlProps.connection,
+    connection: sqlProps.connection.toCfnSqlRunConnection(),
     up: {
       run: sqlProps.up.run.map(st => toCfnSqlStatement(st))
     },

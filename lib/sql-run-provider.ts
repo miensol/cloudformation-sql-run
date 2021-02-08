@@ -12,7 +12,7 @@ interface SqlRunProviderProps {
 
 export class SqlRunProvider extends CoreConstruct {
   private provider: Provider;
-  private lambda: lambda.Function;
+  readonly lambda: lambda.Function;
 
   constructor(scope: Construct, id: string, props?: SqlRunProviderProps) {
     super(scope, id);

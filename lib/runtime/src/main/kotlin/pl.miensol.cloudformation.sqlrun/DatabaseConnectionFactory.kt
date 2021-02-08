@@ -16,6 +16,7 @@ internal class DatabaseConnectionFactory(private val resolver: ParameterReferenc
         return driver.connect(url, Properties().apply {
             setProperty("user", connection.username)
             setProperty("password", connection.password)
+            setProperty("useSSL", "true")
         })
     }
 }

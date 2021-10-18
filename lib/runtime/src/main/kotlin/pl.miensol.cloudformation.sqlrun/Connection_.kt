@@ -4,14 +4,18 @@ import java.math.BigDecimal
 import java.sql.Connection
 import java.sql.PreparedStatement
 
-internal fun Connection.inTransactionDo(function: () -> Unit) {
+internal fun <T> Connection.inTransactionDo(function: () -> T): T {
+    val oldAutoCommit = autoCommit
     autoCommit = false
-    try {
-        function()
-        commit()
+    return try {
+        function().also {
+            commit()
+        }
     } catch (ex: Exception) {
         rollback()
         throw ex
+    } finally {
+        autoCommit = oldAutoCommit
     }
 }
 

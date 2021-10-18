@@ -39,42 +39,45 @@ internal class Handler(
     ): CloudFormationCustomResourceResponseCommon {
         return when (event) {
             is CustomResourceEvent.Create -> {
-                connectionFactory.open(event.resourceProperties.connection).use { connection ->
+                val result = connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
-                        event.resourceProperties.up.run.forEach {
+                        event.resourceProperties.up.run.map {
                             executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
+                log.log("Done handling Create result=$result")
                 CloudFormationCustomResourceResponseCommon(
-                    event, emptyMap()
+                    event, result
                 )
             }
             is CustomResourceEvent.Update -> {
-                connectionFactory.open(event.resourceProperties.connection).use { connection ->
+                val result = connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
                         event.oldResourceProperties.down?.run?.forEach {
                             executeStatement(connection, it, resolver, log)
                         }
-                        event.resourceProperties.up.run.forEach {
+                        event.resourceProperties.up.run.map {
                             executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
+                log.log("Done handling Update result=$result")
                 CloudFormationCustomResourceResponseCommon(
-                    event, emptyMap()
+                    event, result
                 )
             }
             is CustomResourceEvent.Delete -> {
-                connectionFactory.open(event.resourceProperties.connection).use { connection ->
+                val result = connectionFactory.open(event.resourceProperties.connection).use { connection ->
                     connection.inTransactionDo {
-                        event.resourceProperties.down?.run?.forEach {
+                        event.resourceProperties.down?.run?.map {
                             executeStatement(connection, it, resolver, log)
                         }
                     }
                 }
+                log.log("Done handling Delete result=$result")
                 CloudFormationCustomResourceResponseCommon(
-                    event, emptyMap()
+                    event, result
                 )
             }
         }
@@ -87,11 +90,30 @@ internal fun executeStatement(
     statement: CfnSqlStatement,
     resolver: ParameterReferenceResolver,
     log: LambdaLogger
-) {
+): List<Map<String, Any?>> {
     val unresolvedSqlStatement = statement.toSqlStatement()
     log.log("Running $unresolvedSqlStatement")
     val resolvedSqlStatement = unresolvedSqlStatement.resolveParameters(resolver)
     val formattedStatement = resolvedSqlStatement.toJdbcFormattedSqlStatement()
     val sqlStatement = connection.prepareStatement(formattedStatement)
-    sqlStatement.execute()
+    val hasResultSet = sqlStatement.execute()
+    return if (hasResultSet) {
+        sqlStatement.resultSet.use { results ->
+            val meta = results.metaData
+            val columnsCount = meta.columnCount
+            sequence<Map<String, Any?>> {
+                while (results.next()) {
+                    yield(
+                        (1..columnsCount).associateBy(
+                            { meta.getColumnLabel(it) },
+                            { results.getObject(it) }
+                        )
+                    )
+                }
+            }.toList()
+
+        }
+    } else {
+        listOf(mapOf("count" to sqlStatement.updateCount))
+    }
 }

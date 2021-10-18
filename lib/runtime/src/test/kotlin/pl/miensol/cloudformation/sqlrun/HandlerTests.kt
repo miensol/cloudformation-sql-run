@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.LambdaRuntime
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
 import org.testcontainers.containers.JdbcDatabaseContainer
@@ -40,7 +41,11 @@ internal class HandlerMysqlTestTests {
                 password = mysql.password,
                 host = "localhost",
                 port = mysql.firstMappedPort,
-                database = "mysql"
+                database = "mysql",
+                options = mapOf(
+                    "useSSL" to "false",
+                    "trustServerCertificate" to "true"
+                )
             )
 
     private val logger = LambdaRuntime.getLogger()
@@ -155,6 +160,43 @@ internal class HandlerMysqlTestTests {
         }
 
         items.size.shouldEqual(0)
+    }
+
+    @Test
+    fun `can select values`() {
+        //given
+        mysql.executeChanges(
+            "use test",
+            "create table items (id varchar(100) primary key, name text, price int)",
+            "insert into items values ('one', 'One', 10)",
+            "insert into items values ('two', 'Two', 20)"
+        )
+
+        val event = newCreateEvent(
+            CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "select id as Id, name as Name, price as Price from items"
+                    )
+                )
+            ),
+            connection = connection.copy(database = "test")
+        )
+
+        //when
+        val result = runCatching {
+            sut.handleRequest(
+                event,
+                logger
+            )
+        }
+
+        //then
+        result.isFailure.shouldEqual(false)
+        val data = result.getOrThrow().Data as JsonObject
+        data["0.0.Id"].shouldEqual(JsonPrimitive("one"))
+        data["0.0.Name"].shouldEqual(JsonPrimitive("One"))
+        data["0.0.Price"].shouldEqual(JsonPrimitive(10))
     }
 
     @Test

@@ -35,6 +35,10 @@ export class SqlRun extends CoreConstruct {
     })
   }
 
+  getSingleStatementResult(columnName: string, row: number = 0): string{
+    return this.customResource.getAttString(`0.${row}.${columnName}`)
+  }
+
   get connections(){
     return this.provider.lambda.connections
   }

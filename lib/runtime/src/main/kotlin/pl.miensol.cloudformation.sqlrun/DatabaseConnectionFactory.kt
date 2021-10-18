@@ -12,7 +12,8 @@ internal class DatabaseConnectionFactory(private val resolver: ParameterReferenc
 
     private fun open(connection: CfnSqlRunConnection.DriverTypeHostPort): Connection {
         val driver = connection.driverType.loadDriver()
-        val url = "jdbc:mariadb://${connection.host}:${connection.port}/${connection.database}"
+        val options = connection.options.map { (name, value) -> "${name}=${value}" }.joinToString("&")
+        val url = "jdbc:mariadb://${connection.host}:${connection.port}/${connection.database}?${options}"
         return driver.connect(url, Properties().apply {
             setProperty("user", connection.username)
             setProperty("password", connection.password)

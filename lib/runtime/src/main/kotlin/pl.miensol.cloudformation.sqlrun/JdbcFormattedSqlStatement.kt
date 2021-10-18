@@ -11,7 +11,7 @@ fun SqlStatement.toJdbcFormattedSqlStatement(): JdbcFormattedSqlStatement {
     val parametersList = mutableListOf<Any?>()
 
     parameters?.forEach { (name, value) ->
-        formatted = sql.replace(":${name}", "?")
+        formatted = formatted.replace(":${name}", "?")
         parametersList += value
     }
 

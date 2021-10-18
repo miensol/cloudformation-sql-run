@@ -85,6 +85,45 @@ internal class HandlerMysqlTestTests {
     }
 
     @Test
+    fun `can execute with multiple parameters`() {
+        //given
+        mysql.executeChanges("create table items (name text, price int)")
+
+        val event = newCreateEvent(
+            up = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "insert into items values (:itemName, :itemPrice)",
+                        mapOf(
+                            "itemName" to JsonPrimitive("Name"),
+                            "itemPrice" to JsonPrimitive(42),
+                        )
+                    )
+                )
+            ),
+            connection = connection
+        )
+
+        //when
+        sut.handleRequest(
+            event,
+            logger
+        )
+
+        //then
+        val items = mysql.executeQuery("select * from items") {
+                mapOf(
+                    "name" to getString("name"),
+                    "price" to getString("price"),
+                )
+            }
+
+        items.size.shouldEqual(1)
+        items[0]["name"].shouldEqual("Name")
+        items[0]["price"].shouldEqual(42)
+    }
+
+    @Test
     fun `can execute multiple statements`() {
         //given
         mysql.executeChanges(

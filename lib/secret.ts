@@ -31,5 +31,5 @@ export abstract class SqlSecret implements IResolvable {
 }
 
 export function isSqlSecret(value: any): value is SqlSecret {
-  return 'kind' in value && value.kind == SqlSecretSymbol
+  return typeof value === 'object' && 'kind' in value && value.kind == SqlSecretSymbol
 }

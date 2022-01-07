@@ -1,6 +1,6 @@
 {
   "name": "cloudformation-sql-run",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Cloudformation resource to call any http API",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",

@@ -17,13 +17,14 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1"
     implementation "software.amazon.awssdk:secretsmanager:2.15.76"
 
-    runtimeOnly "com.amazonaws:aws-lambda-java-log4j2:1.2.0"
-    runtimeOnly "org.mariadb.jdbc:mariadb-java-client:2.7.1"
+    runtimeOnly "com.amazonaws:aws-lambda-java-log4j2:1.5.0"
+    runtimeOnly "org.mariadb.jdbc:mariadb-java-client:2.7.3"
+    runtimeOnly "org.postgresql:postgresql:42.3.1"
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
     testImplementation 'com.github.miensol:shouldko:0.2.2'
 
-    testImplementation 'org.slf4j:slf4j-simple:1.7.30'
+    testImplementation 'org.slf4j:slf4j-simple:1.7.32'
 
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
 
@@ -33,6 +34,7 @@ dependencies {
     testImplementation "org.testcontainers:testcontainers:$testContainersVersion"
     testImplementation "org.testcontainers:junit-jupiter:$testContainersVersion"
     testImplementation "org.testcontainers:mysql:$testContainersVersion"
+    testImplementation "org.testcontainers:postgresql:$testContainersVersion"
 
     testRuntimeOnly "mysql:mysql-connector-java:8.0.23"
 }
@@ -47,6 +49,10 @@ task buildZip(type: Zip) {
 
 test {
     useJUnitPlatform()
+    jvmArgs = [
+        "-Dorg.slf4j.simpleLogger.defaultLogLevel=info",
+        "-Dorg.slf4j.simpleLogger.log.pl.miensol=debug",
+    ]
 }
 
 compileKotlin {

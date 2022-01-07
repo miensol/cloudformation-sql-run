@@ -4,7 +4,6 @@ import {
   CfnDBInstance,
   DatabaseCluster,
   DatabaseInstance,
-  IDatabaseInstance
 } from "@aws-cdk/aws-rds";
 import * as rds from "@aws-cdk/aws-rds"
 import { SqlSecret } from "./secret";
@@ -19,6 +18,7 @@ export interface DriverTypeHostPortSqlRunConnection {
   database: string
   host: string
   port?: number | string
+  options?: { [key: string]: string }
 }
 
 export interface JdbcUrlSqlRunConnection {
@@ -59,6 +59,7 @@ class DriverTypeHostPort extends SqlRunConnection implements DriverTypeHostPortS
   readonly database: string
   readonly host: string
   readonly port?: number | string
+  readonly options?: { [key: string]: string }
 
   constructor({
                 driverType,
@@ -66,7 +67,8 @@ class DriverTypeHostPort extends SqlRunConnection implements DriverTypeHostPortS
                 password,
                 database,
                 host,
-                port
+                port,
+                options
               }: Omit<DriverTypeHostPortSqlRunConnection, 'type'>) {
     super();
     this.driverType = driverType;
@@ -75,6 +77,7 @@ class DriverTypeHostPort extends SqlRunConnection implements DriverTypeHostPortS
     this.database = database;
     this.host = host;
     this.port = port;
+    this.options = options;
   }
 
   toCfnSqlRunConnection(): CfnSqlRunConnection {

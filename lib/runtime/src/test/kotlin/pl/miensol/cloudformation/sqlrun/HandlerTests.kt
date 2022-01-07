@@ -7,58 +7,44 @@ import io.mockk.verify
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.testcontainers.containers.JdbcDatabaseContainer
 import org.testcontainers.containers.MySQLContainerProvider
+import org.testcontainers.containers.PostgreSQLContainerProvider
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import pl.miensol.shouldko.shouldContain
 import pl.miensol.shouldko.shouldEqual
 import java.sql.ResultSet
 
-@Testcontainers
-internal class HandlerMysqlTestTests {
-    val resolver = mockk<ParameterReferenceResolver> {
-        every {
-            resolve(any())
-        } answers {
-            arg(0)
-        }
-    }
+internal interface HasHandler {
+    val handler: Handler
+    val logger get() = LambdaRuntime.getLogger()
+}
 
-    val sut = Handler(
-        resolver = resolver
-    )
+interface HasDatabase {
+    val database: JdbcDatabaseContainer<*>
+    val connection: CfnSqlRunConnection
+}
 
-    @Container
-    val mysql = MySQLContainerProvider().newInstance()
-        .withUsername("root")
-        .withPassword("")
-
-    val connection
-        get() = newMysqlDriverTypeHostPort()
-            .copy(
-                username = mysql.username,
-                password = mysql.password,
-                host = "localhost",
-                port = mysql.firstMappedPort,
-                database = "mysql",
-                options = mapOf(
-                    "useSSL" to "false",
-                    "trustServerCertificate" to "true"
-                )
-            )
-
-    private val logger = LambdaRuntime.getLogger()
-
+internal interface ItemsTableSqlTests : HasDatabase, HasHandler {
     @Test
-    fun `can execute in mysql`() {
+    fun `can execute multiple statements`() {
         //given
+        database.executeChanges(
+
+            "drop table if exists items",
+            "create table items (id varchar(100) primary key)"
+        )
+
         val event = newCreateEvent(
-            up = CfnSqlRuns(
+            CfnSqlRuns(
                 listOf(
                     CfnSqlStatement(
-                        "CREATE USER 'myDatabaseUser'@'%' IDENTIFIED BY :password",
-                        mapOf("password" to JsonPrimitive("secret"))
+                        "insert into items values ('one')"
+                    ),
+                    CfnSqlStatement(
+                        "insert into items values ('two')"
                     )
                 )
             ),
@@ -66,28 +52,29 @@ internal class HandlerMysqlTestTests {
         )
 
         //when
-        sut.handleRequest(
+        handler.handleRequest(
             event,
             logger
         )
 
         //then
-        val matchingUser =
-            mysql.executeQuery("select user from mysql.user where user = 'myDatabaseUser'") {
-                mapOf(
-                    "user" to getString("user"),
-                )
+        val items =
+            database.executeQuery("select id from items") {
+                getString("id")
             }
 
-        matchingUser.size.shouldEqual(1)
-        matchingUser[0]["user"].shouldEqual("myDatabaseUser")
-        verify { resolver.resolve("secret") }
+        items.size.shouldEqual(2)
+        items.shouldContain("one")
+        items.shouldContain("two")
     }
 
     @Test
     fun `can execute with multiple parameters`() {
         //given
-        mysql.executeChanges("create table items (name text, price int)")
+        database.executeChanges(
+            "drop table if exists items",
+            "create table items (name text, price int)"
+        )
 
         val event = newCreateEvent(
             up = CfnSqlRuns(
@@ -105,68 +92,31 @@ internal class HandlerMysqlTestTests {
         )
 
         //when
-        sut.handleRequest(
+        handler.handleRequest(
             event,
             logger
         )
 
         //then
-        val items = mysql.executeQuery("select * from items") {
-                mapOf(
-                    "name" to getString("name"),
-                    "price" to getString("price"),
-                )
-            }
+        val items = database.executeQuery("select * from items") {
+            mapOf(
+                "name" to getString("name"),
+                "price" to getInt("price"),
+            )
+        }
 
         items.size.shouldEqual(1)
         items[0]["name"].shouldEqual("Name")
         items[0]["price"].shouldEqual(42)
     }
 
-    @Test
-    fun `can execute multiple statements`() {
-        //given
-        mysql.executeChanges(
-            "use test",
-            "create table items (id varchar(100) primary key)"
-        )
-
-        val event = newCreateEvent(
-            CfnSqlRuns(
-                listOf(
-                    CfnSqlStatement(
-                        "insert into items values ('one')"
-                    ),
-                    CfnSqlStatement(
-                        "insert into items values ('two')"
-                    )
-                )
-            ),
-            connection = connection.copy(database = "test")
-        )
-
-        //when
-        sut.handleRequest(
-            event,
-            logger
-        )
-
-        //then
-        val items =
-            mysql.executeQuery("select id from items") {
-                getString("id")
-            }
-
-        items.size.shouldEqual(2)
-        items.shouldContain("one")
-        items.shouldContain("two")
-    }
 
     @Test
     fun `executes multiple statements in transaction`() {
         //given
-        mysql.executeChanges(
-            "use test",
+        database.executeChanges(
+
+            "drop table if exists items",
             "create table items (id varchar(100) primary key)"
         )
 
@@ -181,12 +131,12 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection = connection.copy(database = "test")
+            connection = connection
         )
 
         //when
         val result = runCatching {
-            sut.handleRequest(
+            handler.handleRequest(
                 event,
                 logger
             )
@@ -194,7 +144,7 @@ internal class HandlerMysqlTestTests {
 
         //then
         result.isFailure.shouldEqual(true)
-        val items = mysql.executeQuery("select id from items") {
+        val items = database.executeQuery("select id from items") {
             getString("id")
         }
 
@@ -204,8 +154,9 @@ internal class HandlerMysqlTestTests {
     @Test
     fun `can select values`() {
         //given
-        mysql.executeChanges(
-            "use test",
+        database.executeChanges(
+
+            "drop table if exists items",
             "create table items (id varchar(100) primary key, name text, price int)",
             "insert into items values ('one', 'One', 10)",
             "insert into items values ('two', 'Two', 20)"
@@ -215,16 +166,16 @@ internal class HandlerMysqlTestTests {
             CfnSqlRuns(
                 listOf(
                     CfnSqlStatement(
-                        "select id as Id, name as Name, price as Price from items"
+                        """select id as "Id", name as "Name", price as "Price" from items"""
                     )
                 )
             ),
-            connection = connection.copy(database = "test")
+            connection = connection
         )
 
         //when
         val result = runCatching {
-            sut.handleRequest(
+            handler.handleRequest(
                 event,
                 logger
             )
@@ -241,8 +192,9 @@ internal class HandlerMysqlTestTests {
     @Test
     fun `delete event executes down`() {
         //given
-        mysql.executeChanges(
-            "use test",
+        database.executeChanges(
+
+            "drop table if exists items",
             "create table items (id varchar(100) primary key)"
         )
 
@@ -261,9 +213,9 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection = connection.copy(database = "test")
+            connection = connection
         )
-        sut.handleRequest(create, logger)
+        handler.handleRequest(create, logger)
 
 
         //when
@@ -276,12 +228,12 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection.copy(database = "test")
+            connection
         )
-        sut.handleRequest(delete, logger)
+        handler.handleRequest(delete, logger)
 
         //then
-        val items = mysql.executeQuery("select id from items") {
+        val items = database.executeQuery("select id from items") {
             getString("id")
         }
 
@@ -291,8 +243,9 @@ internal class HandlerMysqlTestTests {
     @Test
     fun `update event executes previous down`() {
         //given
-        mysql.executeChanges(
-            "use test",
+        database.executeChanges(
+
+            "drop table if exists items",
             "create table items (id varchar(100) primary key)"
         )
 
@@ -311,9 +264,9 @@ internal class HandlerMysqlTestTests {
                     )
                 )
             ),
-            connection = connection.copy(database = "test")
+            connection = connection
         )
-        sut.handleRequest(create, logger)
+        handler.handleRequest(create, logger)
 
 
         //when
@@ -326,18 +279,133 @@ internal class HandlerMysqlTestTests {
                 )
             ),
             previous = create,
-            connection = connection.copy(database = "test"),
+            connection = connection,
         )
-        sut.handleRequest(update, logger)
+        handler.handleRequest(update, logger)
 
         //then
-        val items = mysql.executeQuery("select id from items") {
+        val items = database.executeQuery("select id from items") {
             getString("id")
         }
 
         items.shouldEqual(listOf("updated"))
     }
+}
 
+@Testcontainers
+internal class HandlerMysqlTestTests : ItemsTableSqlTests {
+    val resolver = mockk<ParameterReferenceResolver> {
+        every {
+            resolve(any())
+        } answers {
+            arg(0)
+        }
+    }
+
+    override val handler = Handler(
+        resolver = resolver
+    )
+
+    companion object {
+        @Container
+        @JvmStatic
+        val mysql = MySQLContainerProvider().newInstance()
+            .withUsername("root")
+            .withPassword("")
+            .withReuse(true)
+            .withDatabaseName("mysql")
+    }
+
+    override val database = mysql
+
+    override val connection
+        get() = newMysqlDriverTypeHostPort()
+            .copy(
+                username = database.username,
+                password = database.password,
+                host = "localhost",
+                port = database.firstMappedPort,
+                database = database.getDatabaseName(),
+                options = mapOf(
+                    "useSSL" to "false",
+                    "trustServerCertificate" to "true"
+                )
+            )
+
+    @Test
+    fun `can execute in mysql`() {
+        //given
+        val event = newCreateEvent(
+            up = CfnSqlRuns(
+                listOf(
+                    CfnSqlStatement(
+                        "CREATE USER 'myDatabaseUser'@'%' IDENTIFIED BY :password",
+                        mapOf("password" to JsonPrimitive("secret"))
+                    )
+                )
+            ),
+            connection = connection
+        )
+
+        //when
+        handler.handleRequest(
+            event,
+            logger
+        )
+
+        //then
+        val matchingUser =
+            database.executeQuery("select user from mysql.user where user = 'myDatabaseUser'") {
+                mapOf(
+                    "user" to getString("user"),
+                )
+            }
+
+        matchingUser.size.shouldEqual(1)
+        matchingUser[0]["user"].shouldEqual("myDatabaseUser")
+        verify { resolver.resolve("secret") }
+    }
+
+
+}
+
+@Testcontainers
+internal class HandlerPostgresqlTestTests : ItemsTableSqlTests {
+    val resolver = mockk<ParameterReferenceResolver> {
+        every {
+            resolve(any())
+        } answers {
+            arg(0)
+        }
+    }
+
+    override val handler = Handler(
+        resolver = resolver
+    )
+
+    companion object {
+        @Container
+        @JvmStatic
+        val postgresql = PostgreSQLContainerProvider().newInstance()
+            .withUsername("root")
+            .withPassword("")
+            .withReuse(true)
+            .withDatabaseName("test")
+    }
+
+    override val database = postgresql
+
+    override val connection
+        get() = postgresqlDriverTypeHostPort()
+            .copy(
+                username = database.username,
+                password = database.password,
+                host = "localhost",
+                port = database.firstMappedPort,
+                database = database.databaseName,
+                options = mapOf(
+                )
+            )
 }
 
 fun <T> JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeQuery(
@@ -345,6 +413,7 @@ fun <T> JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeQuery(
     buildRow: ResultSet.() -> T
 ): List<T> {
     return createConnection("").use {
+        LoggerFactory.getLogger(javaClass).debug("executeQuery {}", query)
         val resultSet = it.prepareStatement(query).executeQuery()
         resultSet.use {
             sequence {
@@ -358,6 +427,7 @@ fun <T> JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeQuery(
 
 fun JdbcDatabaseContainer<out JdbcDatabaseContainer<*>>.executeChange(query: String): Int {
     return createConnection("").use {
+        LoggerFactory.getLogger(javaClass).debug("executeChange {}", query)
         it.prepareStatement(query).executeUpdate()
     }
 }
@@ -430,11 +500,17 @@ private fun newUpdateEvent(
     requestType = "Update"
 )
 
-fun newMysqlDriverTypeHostPort() = CfnSqlRunConnection.DriverTypeHostPort(
-    driverType = ConnectionDriverType.mysql,
-    username = "test-username",
-    password = "test-password",
-    database = "test-database",
-    host = "database",
-    port = 3306
-)
+fun newMysqlDriverTypeHostPort() = newSqlRunConnectionForDriverType(ConnectionDriverType.mysql)
+
+fun postgresqlDriverTypeHostPort() = newSqlRunConnectionForDriverType(ConnectionDriverType.postgresql)
+
+
+private fun newSqlRunConnectionForDriverType(connectionDriverType: ConnectionDriverType) =
+    CfnSqlRunConnection.DriverTypeHostPort(
+        driverType = connectionDriverType,
+        username = "test-username",
+        password = "test-password",
+        database = "test-database",
+        host = "database",
+        port = connectionDriverType.defaultPort
+    )

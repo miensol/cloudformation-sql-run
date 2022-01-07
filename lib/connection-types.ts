@@ -8,7 +8,7 @@ import {
 import * as rds from "@aws-cdk/aws-rds"
 import { SqlSecret } from "./secret";
 
-type ConnectionDriverType = 'mysql'
+type ConnectionDriverType = 'mysql' | 'postgresql'
 
 export interface DriverTypeHostPortSqlRunConnection {
   type: 'driverTypeHostPort'

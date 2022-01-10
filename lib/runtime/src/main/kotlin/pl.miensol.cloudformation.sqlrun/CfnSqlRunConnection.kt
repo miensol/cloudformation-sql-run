@@ -22,6 +22,9 @@ sealed class CfnSqlRunConnection {
         val options: Map<String, String> = emptyMap()
     ) : CfnSqlRunConnection() {
         override fun resolveDynamicParameterReferences(resolver: ParameterReferenceResolver) =
-            copy(password = resolver.resolve(password))
+            copy(
+                username = resolver.resolve(username),
+                password = resolver.resolve(password)
+            )
     }
 }

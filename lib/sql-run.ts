@@ -1,10 +1,10 @@
-import { Construct as CoreConstruct, CustomResource } from '@aws-cdk/core';
+import { CustomResource } from "aws-cdk-lib";
 import { Construct } from 'constructs';
 import { isSqlSecret } from "./secret";
 import { SqlRunProvider } from "./sql-run-provider";
 import { CfnSqlRunProps, SqlRunProps, toCfnSqlRunProps } from "./sql-run-types";
 
-export class SqlRun extends CoreConstruct {
+export class SqlRun extends Construct {
   private customResource: CustomResource;
   private provider: SqlRunProvider;
   private properties: CfnSqlRunProps

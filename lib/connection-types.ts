@@ -1,11 +1,11 @@
-import { Connections } from "@aws-cdk/aws-ec2";
+import { Connections } from "aws-cdk-lib/aws-ec2";
 import {
   CfnDBCluster,
   CfnDBInstance,
   DatabaseCluster,
-  DatabaseInstance,
-} from "@aws-cdk/aws-rds";
-import * as rds from "@aws-cdk/aws-rds"
+  DatabaseInstance, IInstanceEngine,
+} from "aws-cdk-lib/aws-rds";
+import * as rds from "aws-cdk-lib/aws-rds"
 import { SqlSecret } from "./secret";
 
 type ConnectionDriverType = 'mysql' | 'postgresql'
@@ -86,6 +86,30 @@ class DriverTypeHostPort extends SqlRunConnection implements DriverTypeHostPortS
 }
 
 
+function driverTypeFromDatabaseEngine(engine: IInstanceEngine | undefined) {
+  switch (engine?.engineFamily) {
+    case "POSTGRESQL":
+      return "postgresql"
+    case "MYSQL":
+      return "mysql";
+    default:
+      throw new Error(`Unsupported database engine family: ${engine?.engineFamily}`)
+  }
+}
+
+
+function driverTypeFromCfnDatabaseEngine(engine: CfnDBCluster['engine']) {
+  switch (engine) {
+    case "aurora-postgresql":
+      return "postgresql"
+    case "aurora":
+    case "aurora-mysql":
+      return "mysql";
+    default:
+      throw new Error(`Unsupported database engine family: ${engine}`)
+  }
+}
+
 class DatabaseInstanceConnection extends SqlRunConnection implements DriverTypeHostPortSqlRunConnection {
   readonly type = "driverTypeHostPort"
   readonly driverType: ConnectionDriverType
@@ -99,7 +123,7 @@ class DatabaseInstanceConnection extends SqlRunConnection implements DriverTypeH
     super();
     const cfnDbInstance = db.node.defaultChild as CfnDBInstance;
     this.database = cfnDbInstance.dbName!;
-    this.driverType = "mysql";
+    this.driverType = driverTypeFromDatabaseEngine(db.engine)
     this.host = db.dbInstanceEndpointAddress;
     this.password = SqlSecret.fromSecretsManager((db as DatabaseInstance).secret!, 'password');
     this.username = cfnDbInstance.masterUsername!;
@@ -137,7 +161,7 @@ class DatabaseClusterConnection extends SqlRunConnection implements DriverTypeHo
     super();
     const cfnDBCluster = db.node.defaultChild as CfnDBCluster;
     this.database = cfnDBCluster.databaseName!;
-    this.driverType = "mysql";
+    this.driverType = driverTypeFromCfnDatabaseEngine(cfnDBCluster.engine)
     this.host = db.clusterEndpoint.hostname;
     const secret = (db as DatabaseCluster).secret;
     this.password = SqlSecret.fromSecretsManager(secret!, 'password');

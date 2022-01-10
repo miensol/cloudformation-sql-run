@@ -1,7 +1,7 @@
-import * as lambda from "@aws-cdk/aws-lambda";
-import { Construct as CoreConstruct, Duration, RemovalPolicy, Stack } from "@aws-cdk/core";
-import * as cr from "@aws-cdk/custom-resources";
-import { Provider, ProviderProps } from "@aws-cdk/custom-resources";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import { Duration, Stack } from "aws-cdk-lib";
+import * as cr from "aws-cdk-lib/custom-resources";
+import { Provider, ProviderProps } from "aws-cdk-lib/custom-resources";
 import { Construct, Node } from "constructs";
 import { join as joinPath } from "path";
 
@@ -10,7 +10,7 @@ interface SqlRunProviderProps {
   lambda?: lambda.FunctionOptions
 }
 
-export class SqlRunProvider extends CoreConstruct {
+export class SqlRunProvider extends Construct {
   private provider: Provider;
   readonly lambda: lambda.Function;
 
@@ -49,7 +49,7 @@ export class SqlRunProvider extends CoreConstruct {
   public static getOrCreateProvider(scope: Construct) {
     const stack = Stack.of(scope);
     const id = 'pl.miensol.cdk.custom-resources.sql-run';
-    const x = Node.of(stack).tryFindChild(id) as SqlRunProvider || new SqlRunProvider(stack, id);
+    const x = scope.node.tryFindChild(id) as SqlRunProvider || new SqlRunProvider(stack, id);
     return x.provider;
   }
 }

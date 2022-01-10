@@ -1,6 +1,6 @@
-import * as logs from "@aws-cdk/aws-logs";
-import * as ec2 from "@aws-cdk/aws-ec2";
-import { SecretValue } from "@aws-cdk/core";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import { SecretValue } from "aws-cdk-lib";
 import { CfnSqlRunConnection, SqlRunConnection } from "./connection-types";
 import { isSqlSecret, SqlSecret } from "./secret";
 

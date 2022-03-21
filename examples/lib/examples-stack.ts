@@ -1,9 +1,11 @@
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from "aws-cdk-lib/aws-rds";
 import {
+  CfnDBInstance,
   DatabaseInstanceEngine,
   PostgresEngineVersion
 } from "aws-cdk-lib/aws-rds";
+import { DEFAULT_PASSWORD_EXCLUDE_CHARS } from "aws-cdk-lib/aws-rds/lib/private/util";
 import * as secretmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as cdk from "aws-cdk-lib";
 import { RemovalPolicy } from "aws-cdk-lib";
@@ -14,7 +16,6 @@ export class ExamplesStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const password = new secretmanager.Secret(this, 'Some Password')
 
     const vpc = new ec2.Vpc(this, 'vpc', {
       natGateways: 1
@@ -29,24 +30,44 @@ export class ExamplesStack extends cdk.Stack {
       removalPolicy: RemovalPolicy.DESTROY
     })
 
-    const createDatabaseUser = new SqlRun(this, 'Create Database User', {
+    const cfnDatabase: CfnDBInstance = db.node.defaultChild as CfnDBInstance;
+
+    const password = new secretmanager.Secret(this, 'Replication User Password', {
+      generateSecretString: {
+        excludeCharacters: DEFAULT_PASSWORD_EXCLUDE_CHARS
+      }
+    })
+
+
+    const createReplicationUser = new SqlRun(this, 'Create Replication User', {
       vpc: vpc,
-      connection: SqlRunConnection.fromDatabaseInstance(db),
+      connection: SqlRunConnection.fromDriverTypeHostPort({
+        password: SqlSecret.fromSecretsManager(db.secret!, 'password'),
+        username: cfnDatabase.masterUsername!,
+        driverType: 'postgresql',
+        database: cfnDatabase.dbName!,
+        host: cfnDatabase.attrEndpointAddress!,
+        port: cfnDatabase.attrEndpointPort! as any as number
+      }),
       up: {
         run: [{
-          sql: `CREATE TABLE items(name varchar)`
-        }, {
-          sql: `INSERT INTO items(name) VALUE (:secret)`,
+          sql: `CREATE USER pgrepuser WITH password '${password.secretValue}'`,
           parameters: {
-            secret: SqlSecret.fromSecretsManager(password)
+            externalId:
           }
+        }, {
+          sql: `GRANT rds_replication TO pgrepuser`,
+        }, {
+          sql: `GRANT SELECT ON ALL TABLES IN SCHEMA public TO pgrepuser`,
         }],
       },
       down: {
         run: [{
-          sql: `DROP TABLE items`
+          sql: `DROP USER pgrepuser`
         }]
       }
     });
+
+    createReplicationUser.getStatementResult(0)
   }
 }

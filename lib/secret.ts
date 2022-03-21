@@ -1,6 +1,12 @@
+import {
+  CfnDynamicReference,
+  CfnDynamicReferenceService,
+  IResolvable,
+  IResolveContext,
+  SecretValue
+} from "aws-cdk-lib";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { ISecret } from "aws-cdk-lib/aws-secretsmanager";
-import { IResolvable, IResolveContext, SecretValue } from "aws-cdk-lib";
 import { IStringParameter } from "aws-cdk-lib/aws-ssm";
 
 const SqlSecretSymbol = Symbol("SqlSecret")
@@ -31,8 +37,11 @@ export abstract class SqlSecret implements IResolvable {
   }
 
   static fromSSMParameter(secret: IStringParameter, version?: string): SqlSecret {
+    const cfnDynamicReference = new CfnDynamicReference(CfnDynamicReferenceService.SSM, `${secret.parameterName}:${version ?? ''}`);
     return new class extends SqlSecret {
-      readonly value: SecretValue = SecretValue.ssmSecure(secret.parameterName, version)
+      // it seems that cloudformation validates and we cannot use {{resolve:ssm-secure
+      // readonly value: SecretValue = SecretValue.ssmSecure(secret.parameterName, version)
+      readonly value: SecretValue = SecretValue.cfnDynamicReference(cfnDynamicReference)
       grantRead = (grantee: iam.IGrantable) => secret.grantRead(grantee)
     }
   }

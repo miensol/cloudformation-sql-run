@@ -36,11 +36,19 @@ export class SqlRun extends Construct {
   }
 
   getSingleStatementResult(columnName: string, row: number = 0): string{
-    return this.customResource.getAttString(`0.${row}.${columnName}`)
+    return this.getStatementResult(0, columnName, row)
+  }
+
+  getStatementResult(statementIndex: number, columnName: string, row: number = 0): string{
+    return this.customResource.getAttString(`${statementIndex}.${row}.${columnName}`)
   }
 
   get connections(){
     return this.provider.lambda.connections
+  }
+
+  get providerLambdaRole(){
+    return this.provider.executionRole;
   }
 
   private grantAccessToSecretParameters(sqlRunProperties: SqlRunProps) {

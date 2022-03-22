@@ -7,13 +7,14 @@ fun Any?.toJsonElement(): JsonElement {
         is Number -> JsonPrimitive(this)
         is Boolean -> JsonPrimitive(this)
         is String -> JsonPrimitive(this)
+        is CharSequence -> JsonPrimitive(this.toString())
         is Array<*> -> this.toJsonArray()
         is List<*> -> this.toJsonArray()
         is Map<*, *> -> this.toJsonObject()
         is JsonElement -> this
         null -> JsonNull
         else -> {
-            throw IllegalArgumentException("Can't convert $this to JsonElement")
+            throw IllegalArgumentException("Can't convert $this of type ${this.javaClass} to JsonElement")
         }
     }
 }

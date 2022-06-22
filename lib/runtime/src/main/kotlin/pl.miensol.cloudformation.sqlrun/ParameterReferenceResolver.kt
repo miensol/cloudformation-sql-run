@@ -27,7 +27,7 @@ internal class SystemsManagerParameterReferenceResolver(
     private val ssm: SsmClient = SsmClient.create()
 ) : ParameterReferenceResolver {
     private val matcher = Regex(
-        """\{\{resolve:ssm(-secure)?:(?<name>[a-zA-Z0-9_.\-/]+):(?<version>\d+)\}\}"""
+        """\{\{resolve:ssm(-secure|-custom)?:(?<name>[a-zA-Z0-9_.\-/]+):(?<version>\d+)\}\}"""
     )
 
     override fun resolve(value: String): String {
